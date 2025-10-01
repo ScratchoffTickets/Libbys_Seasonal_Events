@@ -1,0 +1,5 @@
+util.AddNetworkString("SpellbookCollected")
+util.AddNetworkString("StartSpellRandomizer")
+util.AddNetworkString("FinalizeSpell")
+util.AddNetworkString("SpellCastFail")
+util.AddNetworkString("ClearSpellUI")
