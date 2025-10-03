@@ -1,103 +1,112 @@
+local function CleanupMetal(ply, uid)
+    hook.Remove("PlayerFootstep",     uid .. "_Foot")
+    hook.Remove("EntityTakeDamage",   uid .. "_Dmg")
+    hook.Remove("OnPlayerHitGround",  uid .. "_Ground")
+    hook.Remove("PlayerDeath",        uid .. "_Death")
+    hook.Remove("PlayerDisconnected", uid .. "_DC")
+    timer.Remove(uid .. "_Timer")
+
+    if not IsValid(ply) then return end
+    if not ply._metalActive then return end
+
+    ply:SetMaterial("")
+    local vm = ply:GetViewModel()
+    if IsValid(vm) then vm:SetMaterial("") end
+
+    if ply._metalWalkSpeed then ply:SetWalkSpeed(ply._metalWalkSpeed) end
+    if ply._metalRunSpeed  then ply:SetRunSpeed(ply._metalRunSpeed) end
+    if ply._metalJumpPower then ply:SetJumpPower(ply._metalJumpPower) end
+    if ply._metalGravity   ~= nil then ply:SetGravity(ply._metalGravity) end
+
+
+    ply:SetNWBool("IsMetal", false)
+    ply:SetNWBool("SpellInProgress", false)
+    ply:SetNWBool("SpellOverlay", false)
+    ply:StopSound("libbys/halloween/metaltheme.wav")
+
+    ply._metalWalkSpeed, ply._metalRunSpeed = nil, nil
+    ply._metalJumpPower, ply._metalGravity = nil, nil
+    ply._metalActive = nil
+end
+
 return {
     Cast = function(ply)
-        ply:SetNWBool("SpellInProgress", true)
+        if not IsValid(ply) then return false end
+        if ply:GetNWBool("SpellInProgress") or ply._metalActive then return false end
 
-        local originalWalkSpeed = ply:GetWalkSpeed()
-        local originalRunSpeed = ply:GetRunSpeed()
-        local originalJumpPower = ply:GetJumpPower()
-        local originalGravity = ply:GetGravity()
+        local sid64 = ply:SteamID64() or tostring(ply:EntIndex())
+        local uid = "Metal_" .. sid64
+
+        ply._metalActive = true
+        ply:SetNWBool("SpellInProgress", true)
+        ply:SetNWBool("IsMetal", true)
+        ply:SetNWBool("SpellOverlay", true)
+
+        ply._metalWalkSpeed = ply:GetWalkSpeed()
+        ply._metalRunSpeed  = ply:GetRunSpeed()
+        ply._metalJumpPower = ply:GetJumpPower()
+        ply._metalGravity   = ply:GetGravity()
 
         ply:EmitSound("libbys/halloween/zap.wav", 60, 100)
         ply:EmitSound("libbys/halloween/metaltheme.wav", 100, 100)
 
         ply:SetMaterial("debug/env_cubemap_model")
-        ply:GetViewModel():SetMaterial("debug/env_cubemap_model")
+        local vm = ply:GetViewModel()
+        if IsValid(vm) then -- ViewModel still might not work
+            vm:SetMaterial("debug/env_cubemap_model")
+        end
 
         ply:SetWalkSpeed(100)
         ply:SetRunSpeed(140)
         ply:SetJumpPower(0)
         ply:SetGravity(2.2)
-        ply:SetNWBool("IsMetal", true)
 
-        hook.Add("PlayerFootstep", "MetalFootstep_" .. ply:SteamID(), function(player, pos, foot, sound, volume, rf)
-            if player == ply and player:GetNWBool("IsMetal") then
-                local pitch = math.random(90, 110)
-                player:EmitSound("libbys/halloween/clang_short.wav", 85, pitch)
-                util.ScreenShake(player:GetPos(), 5, 3, 0.5, 500)
-                return true
-            end
+
+        hook.Add("PlayerFootstep", uid .. "_Foot", function(player, pos, foot, sound, volume, rf)
+            if player ~= ply or not player:GetNWBool("IsMetal") then return end
+            player:EmitSound("libbys/halloween/clang_short.wav", 85, math.random(90, 110))
+            util.ScreenShake(player:GetPos(), 5, 3, 0.5, 500)
+            return true
         end)
 
-        hook.Add("EntityTakeDamage", "MetalDamageIgnore_" .. ply:SteamID(), function(target, dmginfo)
-            if target == ply and target:GetNWBool("IsMetal") then
-                dmginfo:SetDamage(0)
-                return true
-            end
+        hook.Add("EntityTakeDamage", uid .. "_Dmg", function(target, dmginfo)
+            if target ~= ply or not target:GetNWBool("IsMetal") then return end
+            dmginfo:SetDamage(0)
+            return true
         end)
 
-        hook.Add("OnPlayerHitGround", "MetalCrush_" .. ply:SteamID(), function(player, inWater, onFloater, speed)
-			if not IsFirstTimePredicted() then return end
+        hook.Add("OnPlayerHitGround", uid .. "_Ground", function(player, inWater, onFloater, speed)
+            if player ~= ply or not ply:GetNWBool("IsMetal") then return end
+            if speed <= 200 then return end
 
-            if player == ply and ply:GetNWBool("IsMetal") and speed > 200 then
-                local crushRadius = 200
-                local entities = ents.FindInSphere(ply:GetPos(), crushRadius)
-
-                for _, ent in ipairs(entities) do
-                    if ent:IsPlayer() then
-						if ent ~= ply and ent:Alive() then
-                        	ent:Kill()
-						end
-                    elseif ent:IsNPC() then
-                        ent:TakeDamage(2500, ply, ply)
-                    elseif ent:GetClass() == "prop_physics" then
-                        ent:Fire("Break")
-                    end
+            local crushRadius = 200
+            for _, ent in ipairs(ents.FindInSphere(ply:GetPos(), crushRadius)) do
+                if ent:IsPlayer() then
+                    if ent ~= ply and ent:Alive() then ent:Kill() end
+                elseif ent:IsNPC() then
+                    ent:TakeDamage(2500, ply, ply)
+                elseif ent:GetClass() == "prop_physics" then
+                    ent:Fire("Break")
                 end
             end
         end)
 
-        local timerUniqueID = "Metal_" .. ply:SteamID()
-        timer.Create(timerUniqueID, 37, 1, function()
+        hook.Add("PlayerDeath", uid .. "_Death", function(victim)
+            if victim == ply then CleanupMetal(ply, uid) end
+        end)
+        hook.Add("PlayerDisconnected", uid .. "_DC", function(p)
+            if p == ply then CleanupMetal(ply, uid) end
+        end)
+
+        timer.Create(uid .. "_Timer", 37, 1, function()
+            CleanupMetal(ply, uid)
             if IsValid(ply) then
-                ply:SetMaterial("")
-                ply:GetViewModel():SetMaterial("")
-                ply:SetWalkSpeed(originalWalkSpeed)
-                ply:SetRunSpeed(originalRunSpeed)
-                ply:SetJumpPower(originalJumpPower)
-                ply:SetGravity(originalGravity)
-                ply:SetNWBool("IsMetal", false)
-
-                ply:StopSound("libbys/halloween/metaltheme.wav")
                 ply:EmitSound("libbys/halloween/power_down.ogg", 45, 100)
-
-                hook.Remove("PlayerFootstep", "MetalFootstep_" .. ply:SteamID())
-                hook.Remove("EntityTakeDamage", "MetalDamageIgnore_" .. ply:SteamID())
-                hook.Remove("OnPlayerHitGround", "MetalCrush_" .. ply:SteamID())
-
-                ply:SetNWBool("SpellInProgress", false)
-                ply:SetNWBool("SpellOverlay", false)
             end
         end)
 
-        hook.Add("PlayerDeath", "MetalDeathCleanup_" .. ply:SteamID(), function(victim)
-            if victim == ply then
-                timer.Remove(timerUniqueID)
-                ply:SetMaterial("")
-                ply:GetViewModel():SetMaterial("")
-                ply:SetWalkSpeed(originalWalkSpeed)
-                ply:SetRunSpeed(originalRunSpeed)
-                ply:SetJumpPower(originalJumpPower)
-                ply:SetGravity(originalGravity)
-                ply:SetNWBool("IsMetal", false)
-                ply:StopSound("libbys/halloween/metaltheme.wav")
-                hook.Remove("PlayerFootstep", "MetalFootstep_" .. ply:SteamID())
-                hook.Remove("EntityTakeDamage", "MetalDamageIgnore_" .. ply:SteamID())
-                hook.Remove("OnPlayerHitGround", "MetalCrush_" .. ply:SteamID())
-                hook.Remove("PlayerDeath", "MetalDeathCleanup_" .. ply:SteamID())
-            end
-        end)
 
-        return nil
+        return "async"
     end,
 
     GetDisplayName = function()
