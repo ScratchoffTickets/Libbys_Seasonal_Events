@@ -1,9 +1,9 @@
 "VertexLitGeneric"
 {
-	"$basetexture" "models/props_halloween/hwn_spellbook_generic_alt"
+	"$basetexture" "models/halloween_cus/lby_spellbook_alt"
 	//"$bumpmap" "models/props_halloween/bombonomicon_normal"
 	//"$selfillum" 1
-	"$phongexponenttexture" "models/props_halloween/hwn_spellbook_generic_exp"
+	"$phongexponenttexture" "models/halloween_cus/lby_spellbook_exp_alt"
 	"$basemapalphaphongmask" "1"
 
 	"$phong" "1"

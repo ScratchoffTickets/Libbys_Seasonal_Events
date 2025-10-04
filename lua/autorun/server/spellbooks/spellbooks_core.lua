@@ -11,6 +11,7 @@ local EXPLOSION_DAMAGE = 30
 
 SPELLBOOKS = SPELLBOOKS or {}
 
+SPELLBOOKS.List = spellbooks
 
 local function isBuildOrPill(ply)
     if ply:GetNWBool("BuildMode", false) then return true end
@@ -86,12 +87,16 @@ end
 local function CreateSpellbookProp(pos)
     local spellbook = ents.Create("prop_dynamic")
     if not IsValid(spellbook) then return end
-    spellbook:SetModel("models/props_halloween/hwn_spellbook_upright.mdl")
+    spellbook:SetModel("models/libbys/halloween/lby_spellbook.mdl")
     spellbook:SetPos(pos)
     spellbook:SetSolid(SOLID_NONE)
     spellbook:SetTrigger(true)
     spellbook:SetMoveType(MOVETYPE_NONE)
+    spellbook:SetNWBool("IsManagedSpellbook", true)
+    spellbook.IsManagedSpellbook = true
+    spellbook.SpellbookOwner = "system"
     spellbook:Spawn()
+
 
     EmitSpellSound(pos, "libbys/halloween/spawn.ogg")
     local seq = spellbook:LookupSequence("idle")
@@ -175,9 +180,18 @@ local function GetRandomSpellExcludingLast(ply, spells)
     return pool[math.random(#pool)]
 end
 
+local function IsTrackedSpellbook(ent)
+    if ent.IsManagedSpellbook then return true end
+    if not SPELLBOOKS or not SPELLBOOKS.List then return false end
+    for i = 1, #SPELLBOOKS.List do
+        if SPELLBOOKS.List[i] == ent then return true end
+    end
+    return false
+end
 
 local function HandleSpellbookCollect(ply, spellbook)
     if not IsValid(ply) or not ply:Alive() then return end
+    if not IsValid(spellbook) or not (spellbook.IsManagedSpellbook or IsTrackedSpellbook(spellbook)) then return end
     if ply:GetNWBool("IsRandomizing", false) then return end
     if ply:GetNWString("ActiveSpell", "") ~= "" then return end
     if ply:GetNWBool("IsCasting", false) then return end
@@ -212,19 +226,23 @@ local function HandleSpellbookCollect(ply, spellbook)
         StopPickupSound(ply)
     end)
 end
-SPELLBOOKS.HandleSpellbookCollect = HandleSpellbookCollect
 
 
 local function CheckSpellbookCollect(spellbook)
-    local nearby = ents.FindInSphere(spellbook:GetPos(), COLLECTION_RANGE)
-    for _, ent in ipairs(nearby) do
+    if not (IsValid(spellbook) and spellbook.IsManagedSpellbook) then return end
+    local isTracked = false
+    for i = 1, #spellbooks do
+        if spellbooks[i] == spellbook then isTracked = true break end
+    end
+    if not isTracked then return end
+
+    for _, ent in ipairs(ents.FindInSphere(spellbook:GetPos(), COLLECTION_RANGE)) do
         if ent:IsPlayer() and ent:Alive() then
             HandleSpellbookCollect(ent, spellbook)
             break
         end
     end
 end
-SPELLBOOKS.CheckSpellbookCollect = CheckSpellbookCollect
 
 
 local function CastSpell(ply)
@@ -343,7 +361,8 @@ hook.Add("PostCleanupMap", "SpellbookMapCleanup", function()
     CleanupSpellbooks()
 end)
 
-
+SPELLBOOKS.HandleSpellbookCollect = HandleSpellbookCollect
+SPELLBOOKS.CheckSpellbookCollect = CheckSpellbookCollect
 
 function SPELLBOOKS.GetPlayerSaved(ply) return GetPlayerSpell(ply) end
 function SPELLBOOKS.ClearPlayer(ply) return ClearPlayerSpell(ply) end
