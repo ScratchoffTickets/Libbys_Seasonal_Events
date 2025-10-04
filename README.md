@@ -1,5 +1,7 @@
-# 2024 Libbys Halloween Event
-NOTE: This event is unfinished! Things may not work as intended. Future iterations of this or other events will have proper functionality and security.
+# 2025 Libbys Halloween Event
+
+*This is the 2024 event but with barely any changes*
+
 NOTE: All commands within this even start with 'halloween'
 ISSUE: ConCommand and console printing are broken and hidden. Refer to this txt file for command use
 
